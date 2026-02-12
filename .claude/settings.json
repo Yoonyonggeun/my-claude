@@ -1,6 +1,17 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "TaskCreate",
+      "TaskGet",
+      "TaskUpdate",
+      "TaskList",
+      "SendMessage"
+    ],
     "deny": []
   }
 }

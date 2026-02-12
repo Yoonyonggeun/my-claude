@@ -323,13 +323,48 @@ Use Skill tool: skill="testing-harness", args="<test requirements>"
 
 **Action:** If ANY check fails, fix issue immediately before reporting completion.
 
-## Meta
+## Agent Teams Integration
 
-- **Agent Version:** 1.0.0
-- **Last Updated:** 2026-02-01
-- **Trigger:** Post-design approval, pre-code-delivery
-- **Depends On:** Planner agent output (optional), user specification (required)
-- **Invokes:** testing-harness.md (trigger-based only)
+When operating as a **teammate** within an Agent Teams session, the following additional rules apply:
+
+### Task Claiming
+
+1. Check `TaskList` for available tasks (status: `pending`, no owner, not blocked)
+2. Claim task via `TaskUpdate` with your agent name as `owner`
+3. Set status to `in_progress` before starting work
+4. Prefer tasks in ID order (lowest first) — earlier tasks often set context for later ones
+5. After completion, call `TaskList` to find next available task
+
+### File Ownership Contract
+
+- **ONLY modify files listed as OWNED in your spawn prompt**
+- Read-only files: read freely, but NEVER edit
+- If you need changes to a file you don't own:
+  - Message the team lead with the request
+  - Specify: file path, desired change, reason
+  - Wait for team lead to coordinate with the file owner
+- New files you create are automatically owned by you
+
+### Communication Patterns
+
+| Situation                        | Action                                    |
+|----------------------------------|-------------------------------------------|
+| Task completed                   | Mark task `completed`, check `TaskList`   |
+| Blocked by missing dependency    | Message team lead immediately             |
+| Need interface clarification     | Message architect teammate (if present)   |
+| Found bug in another's code      | Message team lead (not the teammate)      |
+| Ready for review                 | Message critic teammate (if present)      |
+
+### Blocker Escalation
+
+If blocked for any reason:
+1. **Immediately** message team lead with:
+   - Task ID and description
+   - What is blocking you
+   - What you've tried
+   - Suggested resolution
+2. Do NOT wait — move to another available task if possible
+3. Return to blocked task when team lead resolves the issue
 
 ---
 **End of implementer.md** • Safe, verifiable, rollback-ready implementation agent

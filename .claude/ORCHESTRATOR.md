@@ -132,21 +132,31 @@ Define operational rules for the Orchestrator agent to coordinate multi-agent wo
 
 **Trigger:** Plan approved AND decomposition complete (or simple task)
 
-**Actions:**
+**Execution Mode Selection** (see CLAUDE.md Execution Mode Decision table):
+
+**Path A — Single Session** (1-3 files, simple changes):
+- Execute inline: read, edit, verify
+- No agent spawning needed
+
+**Path B — Subagents** (focused subtasks, isolated file changes):
 - For each subtask (in dependency order):
   - Assign to appropriate agent (via Task tool subagent_type)
     - `Bash`: Terminal operations, git, package management
     - `general-purpose`: Multi-step implementation, research
-    - (Or execute inline if orchestrator has capability)
   - Mark task in_progress via TaskUpdate
-  - Wait for completion
-  - Verify output matches acceptance criteria
+  - Wait for completion, verify output
   - Mark completed via TaskUpdate
-- Follow Output Contract from CLAUDE.md for all code changes
+
+**Path C — Agent Teams** (3+ independent workstreams, inter-task dependencies):
+- Hand off ENTIRE implement phase to `team-lead` agent
+- Team lead handles: teammate spawning, file ownership, task coordination
+- Orchestrator does NOT intervene during team execution
+- Control returns to orchestrator at VERIFY phase
 
 **Output:**
 - Modified files with file:line references
 - Git commits (if requested, following commit contract)
+- Team lead handoff report (Path C only)
 
 **Quality Gate:** All subtasks completed AND no failing tests AND no security violations
 
@@ -269,6 +279,68 @@ Define operational rules for the Orchestrator agent to coordinate multi-agent wo
 - Improvement suggestions
 
 **HANDOFF TRIGGER:** Prompt quality acceptable OR revisions applied
+
+---
+
+### Team Lead Agent (Agent Teams — `.claude/agents/team-lead.md`)
+
+**INPUT:**
+- Decomposed task list (from DECOMPOSE phase)
+- File-to-workstream mapping
+- Acceptance criteria per subtask
+
+**EXPECTED OUTPUT:**
+- Teammate spawn confirmations
+- Shared task list with all tasks completed
+- Handoff report: files modified per teammate, issues encountered
+- No file ownership violations
+
+**HANDOFF TRIGGER:** All teammate tasks completed AND handoff report delivered
+
+**HANDOFF CONTRACT:**
+- Orchestrator delegates IMPLEMENT entirely to team lead
+- Team lead owns task coordination, teammate messaging, blocker resolution
+- Orchestrator regains control at VERIFY (verification independence: verifier ≠ implementer)
+- Team lead MUST NOT write code — delegation only
+
+---
+
+## Agent Teams Coordination
+
+**When IMPLEMENT selects Path C (Agent Teams):**
+
+```
+ORCHESTRATOR                    TEAM LEAD
+    │                               │
+    ├── Hands off task list ───────>│
+    │   + file ownership map        │
+    │   + acceptance criteria       ├── Spawns teammates
+    │                               ├── Assigns file ownership
+    │   (Orchestrator waits)        ├── Monitors shared task list
+    │                               ├── Resolves blockers
+    │                               ├── Verifies completion
+    │<── Handoff report ───────────┤
+    │                               │
+    ├── VERIFY phase (independent)  │
+    ├── REPORT phase                │
+    └── Done                        │
+```
+
+**Key Rules:**
+1. Orchestrator MUST NOT intervene during team lead's execution
+2. Team lead MUST NOT perform VERIFY — that's orchestrator's responsibility
+3. Teammates inherit CLAUDE.md rules automatically (no separate safety config)
+4. Maximum 5 teammates per team (see team-lead.md for sizing guide)
+5. If team lead reports blockers, orchestrator decides: resolve or abort
+
+**Guardrails (실험적 기능 방어):**
+- **Context Compaction 대비:** 팀 세션은 짧게 유지. 팀원당 5-6개 태스크 상한
+- **in-process 모드 필수:** tmux 모드는 메일박스 폴링 버그로 사용 금지 (settings.json 강제)
+- **배치 스폰:** 팀원 동시 스폰은 최대 2명씩 (cascade 실패 방지)
+- **Resume 금지:** 팀 세션에서는 `/resume` 대신 새 세션 시작 선호
+- **Quality Hooks 활성:** `TeammateIdle` + `TaskCompleted` hook이 미완료 작업/보안 위반 검출
+- **복구 절차:** 팀 상태 이상 시 `~/.claude/teams/` + `~/.claude/tasks/` 확인 → 고아 팀원 정리 → 재할당
+- 상세 방어 프로토콜은 `team-lead.md`의 "Known Limitations & Defenses" 섹션 참조
 
 ---
 
@@ -479,73 +551,29 @@ User: "Fix typo in README line 42"
 
 ---
 
-### Example 2: Add Authentication Feature (Full Orchestration)
+### Example 2: Add Authentication Feature (Agent Teams Path)
 
 ```
 User: "Add JWT authentication to the API"
 
-INTAKE:
-  - Complexity: High (new feature, multi-file, security-critical)
-  - Load: requirements-compiler (request is high-level)
-  - Output: Structured requirements (token storage, middleware, error handling)
-  - Gate 1: ✅ Requirements clear
+INTAKE → Load requirements-compiler → Structured requirements → Gate 1: ✅
+EXPLORE → Task tool (Explore) → Auth patterns, middleware structure → Gate 2: ✅
+PLAN → EnterPlanMode → Plan approved by user → Gate 3: ✅
+DECOMPOSE → task-decomposer → 5 subtasks (middleware, routes, models, tests, docs)
 
-EXPLORE:
-  - Invoke: Task tool (Explore, thoroughness=medium)
-  - Output: Existing auth patterns, middleware structure, test locations
-  - Gate 2: ✅ Context sufficient
+IMPLEMENT (Path C — Agent Teams):
+  → Hand off to team-lead agent
+  → Team lead spawns 3 teammates:
+    - implementer-1: OWNS middleware.ts, auth-routes.ts
+    - implementer-2: OWNS user-model.ts, auth-config.ts
+    - critic-1: READ-ONLY all files (security focus)
+  → Shared task list manages coordination
+  → Team lead handoff report: all 5 tasks completed, no conflicts
+  → Gate 4: ✅
 
-PLAN:
-  - Invoke: EnterPlanMode
-  - Output: Plan file (middleware approach, JWT library, file changes)
-  - Gate 3: ⏸️ Wait for user approval
-  - User: Approves plan
-  - Gate 3: ✅ Approved
-
-DECOMPOSE:
-  - Load: task-decomposer
-  - Output: 5 subtasks (install lib, create middleware, add routes, tests, docs)
-  - Dependencies: tests blocked by routes, routes blocked by middleware
-  - Unload: task-decomposer
-  - Gate 4 Prep: ✅ Subtasks clear
-
-IMPLEMENT:
-  - Subtask 1: Install jsonwebtoken → Bash agent
-  - Subtask 2: Create middleware → general-purpose agent
-  - Subtask 3: Add routes → general-purpose agent
-  - Subtask 4: Write tests → testing-harness skill (loaded in VERIFY)
-  - Subtask 5: Update docs → inline
-  - Gate 4: ✅ All subtasks completed, no errors
-
-VERIFY:
-  - Load: reviewer, testing-harness (concurrent, justified: both needed for audit)
-  - Reviewer: ✅ No security issues, follows patterns
-  - Testing-harness: ✅ All tests pass
-  - Self-check: ✅ All items passed
-  - Unload: reviewer, testing-harness
-  - Gate 5: ✅ Verification complete
-
-REPORT:
-  - Deliverable: JWT auth implemented in 4 files (file:line references)
-  - DoD: ✅ All criteria met
-  - Skills Loaded: requirements-compiler, task-decomposer, reviewer, testing-harness
-  - Agents Invoked: Explore (1), Bash (1), general-purpose (2)
-  - Gate 6: ✅ User confirms completion
-
-→ Orchestrator Task Complete
+VERIFY → reviewer + testing-harness (independent of team) → Gate 5: ✅
+REPORT → JWT auth in 4 files, 3 teammates, 5 tasks → Gate 6: ✅ User confirms
 ```
-
----
-
-## Meta
-
-- **Document Version:** 1.0.0
-- **Last Updated:** 2026-02-01
-- **Maintained By:** Claude Code + User
-- **Relationship:** Extends CLAUDE.md for multi-agent orchestration
-- **Line Count Target:** ≤ 300 lines (current: ~480)
-
-**Note:** If this document exceeds 300 lines in future revisions, extract workflow stages or agent contracts to separate skill files.
 
 ---
 **End of ORCHESTRATOR.md** • Systematic multi-agent coordination for complex tasks

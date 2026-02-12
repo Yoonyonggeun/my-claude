@@ -4,20 +4,6 @@
 
 This repository establishes a production-grade Claude Code workflow emphasizing **Safety**, **Token Economy**, and **Verifiable Execution**.
 
-## Scope
-
-- Define operating rules for Claude agents working in this repository
-- Establish skill loading strategy to minimize token consumption
-- Provide workflow contracts and verification protocols
-- Index available skills without loading them by default
-
-## Assumptions
-
-- PROMPT_BRIEF.md not found in repository
-- Proceeding best-effort with general-purpose Claude project structure
-- Repository purpose: Claude agent orchestration and skill management
-- Skills will be created incrementally as needed
-
 ## Operating Rules
 
 ### Security & Safety
@@ -46,7 +32,6 @@ This repository establishes a production-grade Claude Code workflow emphasizing 
 
 **CLAUDE.md Constraints:**
 - **Hard Limit:** ≤ 200 lines (this document)
-- **Rationale:** Always-on context loaded in every conversation
 - **Strategy:** Keep core rules minimal; move detailed procedures to `/skills/`
 - **Overflow Rule:** If section exceeds 30 lines, extract to dedicated skill
 
@@ -76,6 +61,22 @@ This repository establishes a production-grade Claude Code workflow emphasizing 
 - **Non-trivial** (new feature, multi-file, architectural) → MUST use EnterPlanMode
 - **Research** (codebase exploration, "how does X work?") → Task tool with Explore agent
 
+## Execution Mode Decision
+
+| Criteria        | Single Session          | Subagents (Task tool)       | Agent Teams                    |
+|-----------------|-------------------------|-----------------------------|--------------------------------|
+| Scope           | 1-3 files               | Focused subtasks            | 3+ independent workstreams     |
+| Communication   | N/A                     | Results only (return value) | Mutual messaging + shared tasks|
+| Token Cost      | Lowest                  | Medium                      | Highest                        |
+| Coordination    | None                    | Parent orchestrates         | Team lead delegates            |
+| Best For        | Quick fixes, small edits| Research, isolated changes  | Full features, refactoring     |
+
+**Selection Rules:**
+- Default to **Single Session** unless task clearly exceeds scope
+- Use **Subagents** for parallel research or isolated file changes
+- Use **Agent Teams** only when 3+ teammates needed with inter-task dependencies
+- Agent Teams require `team-lead` agent for coordination (see `.claude/agents/team-lead.md`)
+
 ## Skill Loading Rules
 
 ⚠️ **CRITICAL PRINCIPLE:** Skills are NOT loaded always-on. Load only when trigger condition is met.
@@ -97,20 +98,6 @@ This repository establishes a production-grade Claude Code workflow emphasizing 
 3. **Single Responsibility:** One skill per task phase
 4. **No Chaining:** Don't auto-load dependent skills; user/workflow decides
 5. **Minimal Context:** Load skill, execute, unload mental model
-
-**Anti-Pattern Example:**
-```
-❌ Load all skills at session start "just in case"
-❌ Keep skill context active after task completion
-❌ Auto-chain skills (e.g., requirements → decomposer → harness)
-```
-
-**Correct Pattern:**
-```
-✅ User: "Add auth feature" → Load requirements-compiler.md only
-✅ Complete requirements extraction → Unload skill context
-✅ User: "Break it down" → Then load task-decomposer.md
-```
 
 ## Output Contract
 
@@ -202,13 +189,3 @@ This repository establishes a production-grade Claude Code workflow emphasizing 
 ```
 
 **Action:** If ANY check fails, fix issue before reporting completion.
-
-## Meta
-
-- **Document Version:** 1.0.0
-- **Last Updated:** 2026-02-01
-- **Maintained By:** Claude Code + User
-- **Line Count Target:** ≤ 200 lines (current: ~195)
-
----
-**End of CLAUDE.md** • Always-on context for safe, efficient, verifiable AI operations
