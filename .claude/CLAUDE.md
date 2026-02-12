@@ -77,6 +77,13 @@ This repository establishes a production-grade Claude Code workflow emphasizing 
 - Use **Agent Teams** only when 3+ teammates needed with inter-task dependencies
 - Agent Teams require `team-lead` agent for coordination (see `.claude/agents/team-lead.md`)
 
+**Agent Teams Role Binding:**
+- Team lead MUST follow `.claude/agents/team-lead.md` rules
+- Teammates MUST be spawned with matching `.claude/agents/{role}.md` as system context
+- Available roles: `planner`, `architect`, `implementer`, `critic`, `prompt-engineer`
+- Spawn prompt must include: "Follow the rules defined in .claude/agents/{role}.md"
+- Teammates use Sonnet by default; only lead uses Opus (cost optimization)
+
 ## Skill Loading Rules
 
 ⚠️ **CRITICAL PRINCIPLE:** Skills are NOT loaded always-on. Load only when trigger condition is met.
